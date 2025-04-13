@@ -124,6 +124,7 @@ impl Minimizer {
         let mut dists: HashSet<usize> = (0..part.num_parts()).collect();
         let worst = (0..dists.len())
             .filter(|i| dfa.states[part.part(*i)[0]].accept == Accept::Never)
+            .filter(|i| Accept::Never == dfa.states[part.part(*i)[0]].accept)
             .max_by_key(|i| part.part(*i).len());
         if let Some(worst) = worst {
             dists.remove(&worst);
