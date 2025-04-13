@@ -61,6 +61,8 @@ compiler plugin story stabilizes a bit.
 #![cfg_attr(test, feature(test))]
 #[cfg(test)]
 extern crate quickcheck;
+#[cfg(test)]
+extern crate test;
 
 #[cfg(test)]
 #[macro_use]
@@ -68,9 +70,6 @@ extern crate matches;
 
 #[cfg(test)]
 extern crate rand;
-
-#[cfg(test)]
-extern crate test;
 
 extern crate itertools;
 extern crate memchr;
@@ -85,8 +84,8 @@ extern crate lazy_static;
 
 mod dfa;
 mod error;
-mod look;
 mod graph;
+mod look;
 mod nfa;
 mod regex;
 mod runner;
@@ -95,4 +94,3 @@ mod unicode;
 pub use error::Error;
 pub use regex::Regex;
 pub type Result<T> = ::std::result::Result<T, Error>;
-
