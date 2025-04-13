@@ -10,7 +10,7 @@ use dfa::{Dfa, RetTrait};
 use nfa::{Accept, StateIdx, StateSet};
 use range_map::{RangeMultiMap, RangeSet};
 use refinery::Partition;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 pub struct Minimizer {
     partition: Partition,
@@ -28,7 +28,9 @@ impl Minimizer {
         let mut part: HashMap<(Accept, Option<&Ret>, RangeSet<u8>), Vec<StateIdx>> = HashMap::new();
         for (idx, st) in dfa.states.iter().enumerate() {
             let chars = st.transitions.to_range_set();
-            part.entry((st.accept, dfa.ret(idx), chars)).or_insert_with(Vec::new).push(idx);
+            part.entry((st.accept, dfa.ret(idx), chars))
+                .or_insert_with(Vec::new)
+                .push(idx);
         }
         part.into_iter().map(|x| x.1).collect()
     }
@@ -38,13 +40,14 @@ impl Minimizer {
     fn refine(&mut self, splitter: &[StateIdx]) {
         let dists = &mut self.distinguishers;
 
-        self.partition.refine_with_callback(splitter, |p, int_idx, diff_idx| {
-            if dists.contains(&int_idx) || p.part(diff_idx).len() < p.part(int_idx).len() {
-                dists.insert(diff_idx);
-            } else {
-                dists.insert(int_idx);
-            }
-        });
+        self.partition
+            .refine_with_callback(splitter, |p, int_idx, diff_idx| {
+                if dists.contains(&int_idx) || p.part(diff_idx).len() < p.part(int_idx).len() {
+                    dists.insert(diff_idx);
+                } else {
+                    dists.insert(int_idx);
+                }
+            });
     }
 
     fn next_distinguisher(&mut self) -> Option<usize> {
@@ -56,16 +59,19 @@ impl Minimizer {
     }
 
     fn get_input_sets(&mut self, part_idx: usize) -> Vec<StateSet> {
-        let inputs: Vec<_> = self.partition.part(part_idx)
-                .iter()
-                .flat_map(|s| self.rev[*s].ranges_values().cloned())
-                .collect();
+        let inputs: Vec<_> = self
+            .partition
+            .part(part_idx)
+            .iter()
+            .flat_map(|s| self.rev[*s].ranges_values().cloned())
+            .collect();
         if inputs.is_empty() {
             return Vec::new();
         }
 
         let inputs = RangeMultiMap::from_vec(inputs);
-        let mut sets: Vec<StateSet> = inputs.group()
+        let mut sets: Vec<StateSet> = inputs
+            .group()
             .ranges_values()
             .map(|&(_, ref x)| x.clone())
             .collect();
@@ -108,7 +114,9 @@ impl Minimizer {
         }
 
         ret.map_states(|s: StateIdx| old_state_to_new[s]);
-        ret.init = dfa.init.iter()
+        ret.init = dfa
+            .init
+            .iter()
             .map(|x| x.map(|s: StateIdx| old_state_to_new[s]))
             .collect();
         ret
@@ -116,14 +124,16 @@ impl Minimizer {
 
     fn new<Ret: RetTrait>(dfa: &Dfa<Ret>) -> Minimizer {
         let init = Minimizer::initial_partition(dfa);
-        let part = Partition::new(init.into_iter().map(|set| set.into_iter()), dfa.num_states());
+        let part = Partition::new(
+            init.into_iter().map(|set| set.into_iter()),
+            dfa.num_states(),
+        );
 
         // According to Hopcroft's algorithm, we're allowed to leave out one of the distinguishers
         // (at least, as long as it isn't a set of accepting states). Choose the one with the
         // most states to leave out.
         let mut dists: HashSet<usize> = (0..part.num_parts()).collect();
         let worst = (0..dists.len())
-            .filter(|i| dfa.states[part.part(*i)[0]].accept == Accept::Never)
             .filter(|i| Accept::Never == dfa.states[part.part(*i)[0]].accept)
             .max_by_key(|i| part.part(*i).len());
         if let Some(worst) = worst {
@@ -137,5 +147,3 @@ impl Minimizer {
         }
     }
 }
-
-

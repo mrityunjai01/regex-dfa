@@ -6,15 +6,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-mod trie;
-mod prefix_searcher;
 mod minimizer;
+mod prefix_searcher;
+mod trie;
 
 use dfa::minimizer::Minimizer;
 use dfa::prefix_searcher::PrefixSearcher;
 use graph::Graph;
-use look::Look;
 use itertools::Itertools;
+use look::Look;
 use nfa::{Accept, StateIdx};
 use range_map::{RangeMap, RangeMultiMap};
 use refinery::Partition;
@@ -38,8 +38,8 @@ impl<Ret> State<Ret> {
     pub fn new(accept: Accept, ret: Option<Ret>) -> State<Ret> {
         State {
             transitions: RangeMap::new(),
-            accept: accept,
-            ret: ret,
+            accept,
+            ret,
         }
     }
 }
@@ -210,11 +210,27 @@ impl<Ret: RetTrait> Dfa<Ret> {
         let (byte_class, log_num_classes) = self.byte_equivalence_classes();
 
         let mut table = vec![u32::MAX; self.num_states() << log_num_classes];
-        let accept: Vec<Option<Ret>> = self.states.iter()
-            .map(|st| if st.accept == Accept::Always { st.ret } else { None })
+        let accept: Vec<Option<Ret>> = self
+            .states
+            .iter()
+            .map(|st| {
+                if st.accept == Accept::Always {
+                    st.ret
+                } else {
+                    None
+                }
+            })
             .collect();
-        let accept_at_eoi: Vec<Option<Ret>> = self.states.iter()
-            .map(|st| if st.accept != Accept::Never { st.ret } else { None })
+        let accept_at_eoi: Vec<Option<Ret>> = self
+            .states
+            .iter()
+            .map(|st| {
+                if st.accept != Accept::Never {
+                    st.ret
+                } else {
+                    None
+                }
+            })
             .collect();
 
         for (idx, st) in self.states.iter().enumerate() {
@@ -394,7 +410,10 @@ impl<Ret: Debug> Debug for Dfa<Ret> {
         try!(f.write_fmt(format_args!("Init: {:?}\n", self.init)));
 
         for (st_idx, st) in self.states.iter().enumerate().take(40) {
-            try!(f.write_fmt(format_args!("\tState {} (accepting: {:?}):\n", st_idx, st.accept)));
+            try!(f.write_fmt(format_args!(
+                "\tState {} (accepting: {:?}):\n",
+                st_idx, st.accept
+            )));
             if let Some(ref ret) = st.ret {
                 try!(f.write_fmt(format_args!("\t\t{:?}\n", ret)));
             }
@@ -403,8 +422,10 @@ impl<Ret: Debug> Debug for Dfa<Ret> {
                 try!(f.write_str("\t\tTransitions:\n"));
                 // Cap it at 5 transitions, since it gets unreadable otherwise.
                 for &(range, target) in st.transitions.ranges_values().take(5) {
-                    try!(f.write_fmt(format_args!("\t\t\t{} -- {} => {}\n",
-                                                  range.start, range.end, target)));
+                    try!(f.write_fmt(format_args!(
+                        "\t\t\t{} -- {} => {}\n",
+                        range.start, range.end, target
+                    )));
                 }
                 if st.transitions.num_ranges() > 5 {
                     try!(f.write_str("\t\t\t...\n"));
@@ -412,7 +433,10 @@ impl<Ret: Debug> Debug for Dfa<Ret> {
             }
         }
         if self.states.len() > 40 {
-            try!(f.write_fmt(format_args!("\t...({} more states)\n", self.states.len() - 40)));
+            try!(f.write_fmt(format_args!(
+                "\t...({} more states)\n",
+                self.states.len() - 40
+            )));
         }
         Ok(())
     }
@@ -444,27 +468,31 @@ pub mod tests {
     }
 
     pub fn make_anchored(re: &str) -> Dfa<(Look, u8)> {
-        let nfa = Nfa::from_regex(re).unwrap()
+        let nfa = Nfa::from_regex(re)
+            .unwrap()
             .remove_looks()
-            .byte_me(usize::MAX).unwrap()
-            .anchor(usize::MAX).unwrap();
+            .byte_me(usize::MAX)
+            .unwrap()
+            .anchor(usize::MAX)
+            .unwrap();
 
-        nfa.determinize(usize::MAX).unwrap()
+        nfa.determinize(usize::MAX)
+            .unwrap()
             .optimize()
             .cut_loop_to_init()
             .optimize()
     }
 
-    pub fn trans_dfa_anchored(size: usize, trans: &[(StateIdx, StateIdx, Range<u8>)])
-    -> Dfa<(Look, u8)> {
+    pub fn trans_dfa_anchored(
+        size: usize,
+        trans: &[(StateIdx, StateIdx, Range<u8>)],
+    ) -> Dfa<(Look, u8)> {
         let mut ret = Dfa::new();
         for _ in 0..size {
             ret.add_state(Accept::Never, None);
         }
         for (src, trans) in trans.iter().group_by(|x| x.0) {
-            let rm: RangeMap<u8, usize> = trans.into_iter()
-                .map(|x| (x.2, x.1))
-                .collect();
+            let rm: RangeMap<u8, usize> = trans.into_iter().map(|x| (x.2, x.1)).collect();
             ret.set_transitions(src, rm);
         }
         ret
@@ -489,8 +517,13 @@ pub mod tests {
     #[test]
     fn test_anchored_dfa_anchored_end() {
         let dfa = make_anchored("a$");
-        let mut tgt = trans_dfa_anchored(2, &[(0, 1, Range::new(b'a', b'a')),
-                                              (1, 1, Range::new(b'a', b'a'))]);
+        let mut tgt = trans_dfa_anchored(
+            2,
+            &[
+                (0, 1, Range::new(b'a', b'a')),
+                (1, 1, Range::new(b'a', b'a')),
+            ],
+        );
         tgt.init[Look::Boundary.as_usize()] = Some(0);
         tgt.states[1].accept = Accept::AtEoi;
         tgt.states[1].ret = Some((Look::Boundary, 0));
@@ -501,7 +534,11 @@ pub mod tests {
     #[test]
     fn test_anchored_dfa_literal_prefix() {
         let dfa = make_anchored("abc[A-z]");
-        let pref = dfa.prefix_strings().into_iter().map(|p| p.0).collect::<Vec<_>>();
+        let pref = dfa
+            .prefix_strings()
+            .into_iter()
+            .map(|p| p.0)
+            .collect::<Vec<_>>();
         assert_eq!(pref, vec!["abc".as_bytes()]);
     }
 
@@ -523,7 +560,7 @@ pub mod tests {
         }
     }
 
-   #[test]
+    #[test]
     fn test_class_normalized() {
         let mut re = make_dfa("[abcdw]").unwrap();
         re.sort_states();
@@ -539,9 +576,18 @@ pub mod tests {
 
     #[test]
     fn test_adjacent_predicates() {
-        assert!(make_dfa_bounded(r"\btest\b\B", 100).unwrap().states.is_empty());
-        assert!(make_dfa_bounded(r"\btest\B\b", 100).unwrap().states.is_empty());
-        assert!(make_dfa_bounded(r"test1\b\Btest2", 100).unwrap().states.is_empty());
+        assert!(make_dfa_bounded(r"\btest\b\B", 100)
+            .unwrap()
+            .states
+            .is_empty());
+        assert!(make_dfa_bounded(r"\btest\B\b", 100)
+            .unwrap()
+            .states
+            .is_empty());
+        assert!(make_dfa_bounded(r"test1\b\Btest2", 100)
+            .unwrap()
+            .states
+            .is_empty());
     }
 
     #[test]
@@ -552,13 +598,11 @@ pub mod tests {
     #[test]
     fn match_priority() {
         macro_rules! eq {
-            ($re1:expr, $re2:expr) => {
-                {
-                    let dfa1 = make_dfa($re1).unwrap();
-                    let dfa2 = make_dfa($re2).unwrap();
-                    assert_eq!(dfa1, dfa2);
-                }
-            };
+            ($re1:expr, $re2:expr) => {{
+                let dfa1 = make_dfa($re1).unwrap();
+                let dfa2 = make_dfa($re2).unwrap();
+                assert_eq!(dfa1, dfa2);
+            }};
         }
         eq!("(a|aa)", "a");
         eq!("abcd*?", "abc");
