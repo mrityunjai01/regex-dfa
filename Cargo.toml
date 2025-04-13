@@ -15,9 +15,9 @@ lazy_static = "0.1"
 memchr = "0.1"
 num-traits = "0.1"
 range-map = "0.1.5"
-refinery = "0.1"
 regex-syntax = "0.2"
 utf8-ranges = "0.1"
+refinery = { git = "https://github.com/jneem/refinery.git"}
 
 [dev-dependencies]
 matches = "0.1"
